@@ -2,7 +2,6 @@ import numpy as np
 from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import average_precision_score, roc_auc_score
 from tqdm import tqdm
-
 import dask.array as da
 
 def translate_dist_mtx_to_simi(dist_arr):

@@ -86,10 +86,7 @@ def get_best_method(best_distance_measures: dict, weighting: bool) -> tuple[str,
         return best_distance_measures["SCR WT"], best_distance_measures["LAB WT"]
 
 # here we test grid-searched measures against all other base measures under 4 conditions
-def evluate_on_test_set(SCR_train: pd.DataFrame, SCR_test: pd.DataFrame, LAB_train: pd.DataFrame, LAB_test: pd.DataFrame, 
-                        SCR_control_measure: str, LAB_control_measure: str, y_test: np.array, k_sizes: list,
-                        SCR_idx_y_nw_dict_test: dict, SCR_idx_y_wt_dict_test: dict, LAB_idx_y_nw_dict_test: dict, LAB_idx_y_wt_dict_test: dict, 
-                        base_model: str) -> tuple[dict, dict]:
+def evluate_on_test_set(SCR_train: pd.DataFrame, SCR_test: pd.DataFrame, LAB_train: pd.DataFrame, LAB_test: pd.DataFrame, SCR_control_measure: str, LAB_control_measure: str, y_test: np.array, k_sizes: list, SCR_idx_y_nw_dict_test: dict, SCR_idx_y_wt_dict_test: dict, LAB_idx_y_nw_dict_test: dict, LAB_idx_y_wt_dict_test: dict, base_model: str) -> tuple[dict, dict]:
     # fill in testing base measure
     control_measures = {"SCR NW": SCR_control_measure, "LAB NW": LAB_control_measure, "SCR WT": SCR_control_measure, "LAB WT": LAB_control_measure}
             
@@ -111,7 +108,7 @@ def evluate_on_test_set(SCR_train: pd.DataFrame, SCR_test: pd.DataFrame, LAB_tra
     return SCR_control_performance, LAB_control_performance
 
 
-def predict_by_LR(df_train: pd.DataFrame, df_test: pd.DataFrame, arr_dict: dict, k: int, y_test: np.array) -> tuple[float, float]:
+def predict_by_LR(df_train: pd.DataFrame, df_test: pd.DataFrame, arr_dict: dict, k: int, y_test: np.array, report_pred: bool = False) -> tuple[float, float]:
     assert len(y_test) == arr_dict["idx"].shape[0]
     assert len(y_test) == arr_dict["label"].shape[0]
     y_pred_probs = []
@@ -129,8 +126,10 @@ def predict_by_LR(df_train: pd.DataFrame, df_test: pd.DataFrame, arr_dict: dict,
     AUPRC = average_precision_score(y_test, y_pred_probs)
     AUROC = roc_auc_score(y_test, y_pred_probs)
     
-    
-    return AUPRC, AUROC
+    if not report_pred:
+        return AUPRC, AUROC
+    else:
+        return y_pred_probs
 
 
 def LR(k_featrues: np.array, k_labels: np.array, featrues_test: np.array) -> float:
@@ -144,7 +143,7 @@ def LR(k_featrues: np.array, k_labels: np.array, featrues_test: np.array) -> flo
     return y_prob
 
 #return AUROC and AUPRC at a certain size k
-def KNN(arr_dict: dict, k: int, y_test: np.array) -> tuple[float, float]:
+def KNN(arr_dict: dict, k: int, y_test: np.array, report_pred: bool = False) -> tuple[float, float]:
     y_train_arr = arr_dict["label"]
     # y_train_arr is a array of shape (len(y_test), len(full_data)), len(full_data) depends on wether it is one-vs-all training or testing
     # if it is one-vs-all training, len(full_data) = len(train_data) - 1, otherwise, if testing, len(full_data) = len(train_data)
@@ -159,34 +158,52 @@ def KNN(arr_dict: dict, k: int, y_test: np.array) -> tuple[float, float]:
     #AUPRC and AUROC
     AUPRC = average_precision_score(y_test, y_pred_probs)
     AUROC = roc_auc_score(y_test, y_pred_probs)
-    return AUPRC, AUROC
+    if not report_pred:
+        return AUPRC, AUROC
+    else:
+        return y_pred_probs
 
 
-def test_final_personalized_model(X_train: pd.DataFrame, X_test: pd.DataFrame, k_sizes: list, grid_search_table: pd.DataFrame, train_idx: list, test_idx: list, y_full: np.array, y_test: np.array, opt_measure_simi_full_dict: dict, num_processors: int, base_model, weighting: bool = False) -> dict:
-    results = {"AUPRC": [], "AUROC": []}
-        
+def test_final_personalized_model(X_train: pd.DataFrame, X_test: pd.DataFrame, k_sizes: list, grid_search_table: pd.DataFrame, train_idx: list, test_idx: list, y_full: np.array, y_test: np.array, opt_measure_simi_full_dict: dict, num_processors: int, base_model, weighting: bool = False, report_pred: bool = False) -> dict:
     # get the corresponding simi mtx
     SCR_simi_full, LAB_simi_full = opt_measure_simi_full_dict["SCR"], opt_measure_simi_full_dict["LAB"]
     
-    for k in tqdm(k_sizes):
-        
+    if not report_pred:
+        results = {"AUPRC": [], "AUROC": []}
+        for k in tqdm(k_sizes):
+
+            best_weights = eval(get_best_weights(grid_search_table, k, weighting))
+
+            A = best_weights[0]
+            B = best_weights[1]
+
+            combined_weights_dict = combine_best_weights_for_test(SCR_simi_full, LAB_simi_full, A, B, train_idx, test_idx, y_full, num_processors)
+            
+            if base_model == "KNN":
+                AUPRC_full, AUROC_full = KNN(combined_weights_dict, k, y_test)
+            elif base_model == "LR":
+                AUPRC_full, AUROC_full = predict_by_LR(X_train, X_test, combined_weights_dict, k, y_test)
+
+
+            results["AUPRC"].append(AUPRC_full)
+            results["AUROC"].append(AUROC_full)
+
+        return results
+    
+    # for the subgroup performance analysis (at a single k)
+    else:
+        assert len(k_sizes) == 1
+        k = k_sizes[0]
         best_weights = eval(get_best_weights(grid_search_table, k, weighting))
-        
         A = best_weights[0]
         B = best_weights[1]
-        
-        combined_weights_dict = combine_best_weights_for_test(SCR_simi_full, LAB_simi_full, A, B, train_idx, test_idx, 
-                                                              y_full, num_processors)
+        combined_weights_dict = combine_best_weights_for_test(SCR_simi_full, LAB_simi_full, A, B, train_idx, test_idx, y_full, num_processors)
         if base_model == "KNN":
-            AUPRC_full, AUROC_full = KNN(combined_weights_dict, k, y_test)
+            y_pred_probs = KNN(combined_weights_dict, k, y_test, report_pred = True)
         elif base_model == "LR":
-            AUPRC_full, AUROC_full = predict_by_LR(X_train, X_test, combined_weights_dict, k, y_test)
-        
-        
-        results["AUPRC"].append(AUPRC_full)
-        results["AUROC"].append(AUROC_full)
-        
-    return results
+            y_pred_probs = predict_by_LR(X_train, X_test, combined_weights_dict, k, y_test, report_pred = True)
+        assert len(y_pred_probs) == len(y_test)
+        return y_pred_probs 
 
 def combine_best_weights_for_test(SCR_simi_full: np.array, LAB_simi_full: np.array, A: float, B: float, 
                                   train_idx: list, test_idx: list, y_full: np.array, num_processors: int) -> dict:   # weighted sum of the simi mtxs and min-max normalization 
