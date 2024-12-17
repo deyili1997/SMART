@@ -50,41 +50,6 @@ def sort_by_idx_arr(idx_arr: np.array, y_train: np.array) -> np.array:
     return y_train_arr
 
 
-# here since query_grid_search_table give us 2 best method (SCR + LAB) at the same time,
-# we test SCR and LAB under one condition at the same time
-def perform_evluation_on_test_set(SCR_train: pd.DataFrame, SCR_test: pd.DataFrame, LAB_train: pd.DataFrame, LAB_test: pd.DataFrame,
-                                  SCR_idx_y_dict_test: dict, LAB_idx_y_dict_test: dict, 
-                                  y_test: np.array, k_sizes: list, best_distance_measures: dict, 
-                                  weighting: bool, base_model: str) -> tuple[dict, dict]:
-    
-    SCR_performance = {"AUPRC": [], "AUROC": []}
-    LAB_performance = {"AUPRC": [], "AUROC": []}
-    
-    best_SCR_measure, best_LAB_measure = get_best_method(best_distance_measures, weighting)
-    SCR_arr_dict, LAB_arr_dict = SCR_idx_y_dict_test[best_SCR_measure], LAB_idx_y_dict_test[best_LAB_measure]
-    
-    for k in tqdm(k_sizes):
-        if base_model == "KNN":
-            SCR_AUPRC,  SCR_AUROC = KNN(SCR_arr_dict, k, y_test)
-            LAB_AUPRC, LAB_AUROC = KNN(LAB_arr_dict, k, y_test)
-        elif base_model == "LR":
-            SCR_AUPRC,  SCR_AUROC = predict_by_LR(SCR_train, SCR_test, SCR_arr_dict, k, y_test)
-            LAB_AUPRC, LAB_AUROC = predict_by_LR(LAB_train, LAB_test, LAB_arr_dict, k, y_test)
-            
-        SCR_performance["AUPRC"].append(SCR_AUPRC)
-        SCR_performance["AUROC"].append(SCR_AUROC)
-        LAB_performance["AUPRC"].append(LAB_AUPRC)
-        LAB_performance["AUROC"].append(LAB_AUROC)
-        
-    return SCR_performance, LAB_performance
-
-
-def get_best_method(best_distance_measures: dict, weighting: bool) -> tuple[str, str]:
-    if not weighting:
-        return best_distance_measures["SCR NW"], best_distance_measures["LAB NW"]
-    else:
-        return best_distance_measures["SCR WT"], best_distance_measures["LAB WT"]
-
 # here we test grid-searched measures against all other base measures under 4 conditions
 def evluate_on_test_set(SCR_train: pd.DataFrame, SCR_test: pd.DataFrame, LAB_train: pd.DataFrame, LAB_test: pd.DataFrame, SCR_control_measure: str, LAB_control_measure: str, y_test: np.array, k_sizes: list, SCR_idx_y_nw_dict_test: dict, SCR_idx_y_wt_dict_test: dict, LAB_idx_y_nw_dict_test: dict, LAB_idx_y_wt_dict_test: dict, base_model: str) -> tuple[dict, dict]:
     # fill in testing base measure
@@ -108,7 +73,47 @@ def evluate_on_test_set(SCR_train: pd.DataFrame, SCR_test: pd.DataFrame, LAB_tra
     return SCR_control_performance, LAB_control_performance
 
 
-def predict_by_LR(df_train: pd.DataFrame, df_test: pd.DataFrame, arr_dict: dict, k: int, y_test: np.array, report_pred: bool = False) -> tuple[float, float]:
+
+# here since query_grid_search_table give us 2 best method (SCR + LAB) at the same time,
+# we test SCR and LAB under one condition at the same time
+def perform_evluation_on_test_set(SCR_train: pd.DataFrame, SCR_test: pd.DataFrame, LAB_train: pd.DataFrame, LAB_test: pd.DataFrame,
+                                  SCR_idx_y_dict_test: dict, LAB_idx_y_dict_test: dict, 
+                                  y_test: np.array, k_sizes: list, best_distance_measures: dict, 
+                                  weighting: bool, base_model: str) -> tuple[dict, dict]:
+    
+    SCR_performance = {"AUPRC": [], "AUROC": []}
+    LAB_performance = {"AUPRC": [], "AUROC": []}
+    
+    best_SCR_measure, best_LAB_measure = get_best_method(best_distance_measures, weighting)
+    SCR_arr_dict, LAB_arr_dict = SCR_idx_y_dict_test[best_SCR_measure], LAB_idx_y_dict_test[best_LAB_measure]
+    
+    for k in tqdm(k_sizes):
+        if base_model == "KNN":
+            SCR_AUPRC, SCR_AUROC = KNN(SCR_arr_dict, k, y_test)
+            LAB_AUPRC, LAB_AUROC = KNN(LAB_arr_dict, k, y_test)
+        elif base_model == "LR":
+            SCR_AUPRC, SCR_AUROC = predict_by_LR(SCR_train, SCR_test, SCR_arr_dict, k, y_test)
+            LAB_AUPRC, LAB_AUROC = predict_by_LR(LAB_train, LAB_test, LAB_arr_dict, k, y_test)
+            
+        SCR_performance["AUPRC"].append(SCR_AUPRC)
+        SCR_performance["AUROC"].append(SCR_AUROC)
+        LAB_performance["AUPRC"].append(LAB_AUPRC)
+        LAB_performance["AUROC"].append(LAB_AUROC)
+        
+    return SCR_performance, LAB_performance
+
+
+def get_best_method(best_distance_measures: dict, weighting: bool) -> tuple[str, str]:
+    if not weighting:
+        return best_distance_measures["SCR NW"], best_distance_measures["LAB NW"]
+    else:
+        return best_distance_measures["SCR WT"], best_distance_measures["LAB WT"]
+
+
+
+
+def predict_by_LR(df_train: pd.DataFrame, df_test: pd.DataFrame, arr_dict: dict, k: int, y_test: np.array, 
+                  report_pred: bool = False, report_CI: bool = False) -> tuple[float, float]:
     assert len(y_test) == arr_dict["idx"].shape[0]
     assert len(y_test) == arr_dict["label"].shape[0]
     y_pred_probs = []
@@ -123,11 +128,15 @@ def predict_by_LR(df_train: pd.DataFrame, df_test: pd.DataFrame, arr_dict: dict,
         y_pred_probs.append(y_prob)
     
     assert(not np.isnan(np.array(y_pred_probs)).any())
-    AUPRC = average_precision_score(y_test, y_pred_probs)
-    AUROC = roc_auc_score(y_test, y_pred_probs)
-    
+
     if not report_pred:
-        return AUPRC, AUROC
+        if not report_CI:
+            AUPRC = average_precision_score(y_test, y_pred_probs)
+            AUROC = roc_auc_score(y_test, y_pred_probs)
+            return AUPRC, AUROC
+        else:
+            performance_CI = compute_CI(y_test, y_pred_probs)
+            return performance_CI
     else:
         return y_pred_probs
 
@@ -143,7 +152,7 @@ def LR(k_featrues: np.array, k_labels: np.array, featrues_test: np.array) -> flo
     return y_prob
 
 #return AUROC and AUPRC at a certain size k
-def KNN(arr_dict: dict, k: int, y_test: np.array, report_pred: bool = False) -> tuple[float, float]:
+def KNN(arr_dict: dict, k: int, y_test: np.array, report_pred: bool = False, report_CI: bool = False) -> tuple[float, float]:
     y_train_arr = arr_dict["label"]
     # y_train_arr is a array of shape (len(y_test), len(full_data)), len(full_data) depends on wether it is one-vs-all training or testing
     # if it is one-vs-all training, len(full_data) = len(train_data) - 1, otherwise, if testing, len(full_data) = len(train_data)
@@ -154,17 +163,24 @@ def KNN(arr_dict: dict, k: int, y_test: np.array, report_pred: bool = False) -> 
         k_labels = y_train_arr[i, :k]
         y_pred_prob = np.sum(k_labels) / len(k_labels)
         y_pred_probs.append(y_pred_prob)
-    
-    #AUPRC and AUROC
-    AUPRC = average_precision_score(y_test, y_pred_probs)
-    AUROC = roc_auc_score(y_test, y_pred_probs)
+        
     if not report_pred:
-        return AUPRC, AUROC
+        if not report_CI:
+            AUPRC = average_precision_score(y_test, y_pred_probs)
+            AUROC = roc_auc_score(y_test, y_pred_probs)
+            return AUPRC, AUROC
+        else:
+            performance_CI = compute_CI(y_test, y_pred_probs)
+            return performance_CI
     else:
         return y_pred_probs
 
 
-def test_final_personalized_model(X_train: pd.DataFrame, X_test: pd.DataFrame, k_sizes: list, grid_search_table: pd.DataFrame, train_idx: list, test_idx: list, y_full: np.array, y_test: np.array, opt_measure_simi_full_dict: dict, num_processors: int, base_model, weighting: bool = False, report_pred: bool = False) -> dict:
+def test_final_personalized_model(X_train: pd.DataFrame, X_test: pd.DataFrame, 
+                                  k_sizes: list, grid_search_table: pd.DataFrame, train_idx: list, 
+                                  test_idx: list, y_full: np.array, y_test: np.array, 
+                                  opt_measure_simi_full_dict: dict, num_processors: int, base_model, 
+                                  weighting: bool = False, report_pred: bool = False, report_CI: bool = False) -> dict:
     # get the corresponding simi mtx
     SCR_simi_full, LAB_simi_full = opt_measure_simi_full_dict["SCR"], opt_measure_simi_full_dict["LAB"]
     
@@ -179,14 +195,22 @@ def test_final_personalized_model(X_train: pd.DataFrame, X_test: pd.DataFrame, k
 
             combined_weights_dict = combine_best_weights_for_test(SCR_simi_full, LAB_simi_full, A, B, train_idx, test_idx, y_full, num_processors)
             
-            if base_model == "KNN":
-                AUPRC_full, AUROC_full = KNN(combined_weights_dict, k, y_test)
-            elif base_model == "LR":
-                AUPRC_full, AUROC_full = predict_by_LR(X_train, X_test, combined_weights_dict, k, y_test)
+            if report_CI:
+                if base_model == "KNN":
+                    performance_CI = KNN(combined_weights_dict, k, y_test, report_CI = report_CI)
+                elif base_model == "LR":
+                    performance_CI = predict_by_LR(X_train, X_test, combined_weights_dict, k, y_test, report_CI = report_CI)
 
 
-            results["AUPRC"].append(AUPRC_full)
-            results["AUROC"].append(AUROC_full)
+                results["AUPRC"].append((performance_CI["AUPRC_mean"], performance_CI["AUPRC_low"], performance_CI["AUPRC_up"]))
+                results["AUROC"].append((performance_CI["AUROC_mean"], performance_CI["AUROC_low"], performance_CI["AUROC_up"]))
+            else:
+                if base_model == "KNN":
+                    AUPRC, AUROC = KNN(combined_weights_dict, k, y_test)
+                elif base_model == "LR":
+                    AUPRC, AUROC = predict_by_LR(X_train, X_test, combined_weights_dict, k, y_test)
+                results["AUPRC"].append(AUPRC)
+                results["AUROC"].append(AUROC)
 
         return results
     
@@ -223,3 +247,67 @@ def get_best_weights(grid_search_table: np.array, k: int, weighting: bool) -> st
         return grid_search_table.loc[k, "COMBINE NW"]
     else:
         return grid_search_table.loc[k, "COMBINE WT"]
+    
+
+def compute_CI(y_true: np.array, y_pred_proba: np.array) -> dict:
+    np.random.seed(888)
+    AUPRC_scores = []
+    AUROC_scores = []
+    
+    y_true = np.array(y_true)
+    y_pred_proba = np.array(y_pred_proba)
+    
+    n_bootstrap = 2000
+    for i in range(n_bootstrap):
+        # Stratified sampling: maintain label proportion
+        y_true_resampled, y_pred_resampled = resample_stratified(y_true, y_pred_proba)
+        
+        # Calculate AUPRC
+        AUPRC = average_precision_score(y_true_resampled, y_pred_resampled)
+        AUPRC_scores.append(AUPRC)
+        
+        # Calculate AUROC
+        AUROC = roc_auc_score(y_true_resampled, y_pred_resampled)
+        AUROC_scores.append(AUROC)
+    
+    # Calculate mean and confidence intervals
+    ci_low = 2.5
+    ci_up = 97.5
+    
+    AUPRC_mean = np.mean(AUPRC_scores)
+    AUPRC_low = np.percentile(AUPRC_scores, ci_low)
+    AUPRC_up = np.percentile(AUPRC_scores, ci_up)
+    
+    AUROC_mean = np.mean(AUROC_scores)
+    AUROC_low = np.percentile(AUROC_scores, ci_low)
+    AUROC_up = np.percentile(AUROC_scores, ci_up)
+    
+    return {
+        "AUPRC_mean": AUPRC_mean,
+        "AUPRC_low": AUPRC_low,
+        "AUPRC_up": AUPRC_up,
+        "AUROC_mean": AUROC_mean,
+        "AUROC_low": AUROC_low,
+        "AUROC_up": AUROC_up
+    }
+    
+def resample_stratified(y_true: np.array, y_pred_proba: np.array) -> tuple[np.array, np.array]:
+    # Separate indices for positive and negative classes
+    pos_indices = np.where(y_true == 1)[0]
+    neg_indices = np.where(y_true == 0)[0]
+    
+    # Resample while maintaining proportions
+    n_pos = len(pos_indices)
+    n_neg = len(neg_indices)
+    
+    pos_resampled = np.random.choice(pos_indices, n_pos, replace=True)
+    neg_resampled = np.random.choice(neg_indices, n_neg, replace=True)
+    
+    # Combine resampled indices
+    resampled_indices = np.concatenate([pos_resampled, neg_resampled])
+    np.random.shuffle(resampled_indices)
+    
+    y_true_resampled = y_true[resampled_indices]
+    y_pred_resampled = y_pred_proba[resampled_indices]
+    
+    return y_true_resampled, y_pred_resampled
