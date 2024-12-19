@@ -86,7 +86,7 @@ def get_best_method(best_distance_measures: dict, weighting: bool) -> tuple[str,
         return best_distance_measures["SCR WT"], best_distance_measures["LAB WT"]
 
 # here we test grid-searched measures against all other base measures under 4 conditions
-def evluate_on_test_set(SCR_train: pd.DataFrame, SCR_test: pd.DataFrame, LAB_train: pd.DataFrame, LAB_test: pd.DataFrame, SCR_control_measure: str, LAB_control_measure: str, y_test: np.array, k_sizes: list, SCR_idx_y_nw_dict_test: dict, SCR_idx_y_wt_dict_test: dict, LAB_idx_y_nw_dict_test: dict, LAB_idx_y_wt_dict_test: dict, base_model: str) -> tuple[dict, dict]:
+def evluate_on_test_set(SCR_train: pd.DataFrame, SCR_test: pd.DataFrame, LAB_train: pd.DataFrame, LAB_test: pd.DataFrame, SCR_control_measure: str, LAB_control_measure: str, y_test: np.array, k_sizes: list, SCR_idx_y_nw_dict_test: dict, SCR_idx_y_wt_dict_test: dict, LAB_idx_y_nw_dict_test: dict, LAB_idx_y_wt_dict_test: dict, base_model: str, test_nw: bool = True) -> tuple[dict, dict]:
     # fill in testing base measure
     control_measures = {"SCR NW": SCR_control_measure, "LAB NW": LAB_control_measure, "SCR WT": SCR_control_measure, "LAB WT": LAB_control_measure}
             
@@ -94,15 +94,16 @@ def evluate_on_test_set(SCR_train: pd.DataFrame, SCR_test: pd.DataFrame, LAB_tra
     LAB_control_performance = dict()
             
     # test under 4 conditions
-    SCR_nw_control, LAB_nw_control = perform_evluation_on_test_set(SCR_train, SCR_test, LAB_train, LAB_test, SCR_idx_y_nw_dict_test, LAB_idx_y_nw_dict_test, 
-                                                                   y_test, k_sizes, control_measures, weighting = False, base_model = base_model)
+    if test_nw:
+        SCR_nw_control, LAB_nw_control = perform_evluation_on_test_set(SCR_train, SCR_test, LAB_train, LAB_test, SCR_idx_y_nw_dict_test, LAB_idx_y_nw_dict_test, 
+                                                                       y_test, k_sizes, control_measures, weighting = False, base_model = base_model)
+        SCR_control_performance["NW"] = SCR_nw_control
+        LAB_control_performance["NW"] = LAB_nw_control
+    
+    
     SCR_wt_control, LAB_wt_control = perform_evluation_on_test_set(SCR_train, SCR_test, LAB_train, LAB_test, SCR_idx_y_wt_dict_test, LAB_idx_y_wt_dict_test,
                                                                    y_test, k_sizes, control_measures, weighting = True, base_model = base_model)
-    
-    SCR_control_performance["NW"] = SCR_nw_control
     SCR_control_performance["WT"] = SCR_wt_control
-    
-    LAB_control_performance["NW"] = LAB_nw_control
     LAB_control_performance["WT"] = LAB_wt_control
     
     return SCR_control_performance, LAB_control_performance
