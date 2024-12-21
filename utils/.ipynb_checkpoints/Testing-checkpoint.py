@@ -50,6 +50,38 @@ def sort_by_idx_arr(idx_arr: np.array, y_train: np.array) -> np.array:
     return y_train_arr
 
 
+
+# here we test grid-searched measures against all other base measures under 4 conditions
+def evluate_on_test_set(SCR_train: pd.DataFrame, SCR_test: pd.DataFrame, LAB_train: pd.DataFrame, 
+                        LAB_test: pd.DataFrame, SCR_control_measure: str, LAB_control_measure: str, 
+                        y_test: np.array, k_sizes: list, SCR_idx_y_nw_dict_test: dict, 
+                        SCR_idx_y_wt_dict_test: dict, LAB_idx_y_nw_dict_test: dict, 
+                        LAB_idx_y_wt_dict_test: dict, base_model: str, test_nw: bool = True) -> tuple[dict, dict]:
+    # fill in testing base measure
+    control_measures = {"SCR NW": SCR_control_measure, "LAB NW": LAB_control_measure, "SCR WT": SCR_control_measure, "LAB WT": LAB_control_measure}
+            
+    SCR_control_performance = dict()
+    LAB_control_performance = dict()
+            
+    # test under 4 conditions
+    if test_nw:
+        SCR_nw_control, LAB_nw_control = perform_evluation_on_test_set(SCR_train, SCR_test, LAB_train, LAB_test, SCR_idx_y_nw_dict_test, LAB_idx_y_nw_dict_test, 
+                                                                       y_test, k_sizes, control_measures, weighting = False, base_model = base_model)
+        SCR_control_performance["NW"] = SCR_nw_control
+        LAB_control_performance["NW"] = LAB_nw_control
+    else:
+        assert SCR_idx_y_nw_dict_test == None
+        assert LAB_idx_y_nw_dict_test == None
+    
+    
+    SCR_wt_control, LAB_wt_control = perform_evluation_on_test_set(SCR_train, SCR_test, LAB_train, LAB_test, SCR_idx_y_wt_dict_test, LAB_idx_y_wt_dict_test,
+                                                                   y_test, k_sizes, control_measures, weighting = True, base_model = base_model)
+    SCR_control_performance["WT"] = SCR_wt_control
+    LAB_control_performance["WT"] = LAB_wt_control
+    
+    return SCR_control_performance, LAB_control_performance
+
+
 # here since query_grid_search_table give us 2 best method (SCR + LAB) at the same time,
 # we test SCR and LAB under one condition at the same time
 def perform_evluation_on_test_set(SCR_train: pd.DataFrame, SCR_test: pd.DataFrame, LAB_train: pd.DataFrame, LAB_test: pd.DataFrame,
@@ -85,29 +117,6 @@ def get_best_method(best_distance_measures: dict, weighting: bool) -> tuple[str,
     else:
         return best_distance_measures["SCR WT"], best_distance_measures["LAB WT"]
 
-# here we test grid-searched measures against all other base measures under 4 conditions
-def evluate_on_test_set(SCR_train: pd.DataFrame, SCR_test: pd.DataFrame, LAB_train: pd.DataFrame, LAB_test: pd.DataFrame, SCR_control_measure: str, LAB_control_measure: str, y_test: np.array, k_sizes: list, SCR_idx_y_nw_dict_test: dict, SCR_idx_y_wt_dict_test: dict, LAB_idx_y_nw_dict_test: dict, LAB_idx_y_wt_dict_test: dict, base_model: str, test_nw: bool = True) -> tuple[dict, dict]:
-    # fill in testing base measure
-    control_measures = {"SCR NW": SCR_control_measure, "LAB NW": LAB_control_measure, "SCR WT": SCR_control_measure, "LAB WT": LAB_control_measure}
-            
-    SCR_control_performance = dict()
-    LAB_control_performance = dict()
-            
-    # test under 4 conditions
-    if test_nw:
-        SCR_nw_control, LAB_nw_control = perform_evluation_on_test_set(SCR_train, SCR_test, LAB_train, LAB_test, SCR_idx_y_nw_dict_test, LAB_idx_y_nw_dict_test, 
-                                                                       y_test, k_sizes, control_measures, weighting = False, base_model = base_model)
-        SCR_control_performance["NW"] = SCR_nw_control
-        LAB_control_performance["NW"] = LAB_nw_control
-    
-    
-    SCR_wt_control, LAB_wt_control = perform_evluation_on_test_set(SCR_train, SCR_test, LAB_train, LAB_test, SCR_idx_y_wt_dict_test, LAB_idx_y_wt_dict_test,
-                                                                   y_test, k_sizes, control_measures, weighting = True, base_model = base_model)
-    SCR_control_performance["WT"] = SCR_wt_control
-    LAB_control_performance["WT"] = LAB_wt_control
-    
-    return SCR_control_performance, LAB_control_performance
-
 
 def predict_by_LR(df_train: pd.DataFrame, df_test: pd.DataFrame, arr_dict: dict, k: int, y_test: np.array, report_pred: bool = False) -> tuple[float, float]:
     assert len(y_test) == arr_dict["idx"].shape[0]
@@ -142,6 +151,7 @@ def LR(k_featrues: np.array, k_labels: np.array, featrues_test: np.array) -> flo
         LR.fit(k_featrues, k_labels)
         y_prob = LR.predict_proba(featrues_test)[0][1]
     return y_prob
+
 
 #return AUROC and AUPRC at a certain size k
 def KNN(arr_dict: dict, k: int, y_test: np.array, report_pred: bool = False) -> tuple[float, float]:

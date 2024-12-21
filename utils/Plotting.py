@@ -11,29 +11,16 @@ def save_figure(fig, folder_name: str, figure_name: str) -> None:
     
 
 def add_subplot_index(axs, n_rows: int, n_cols: int) -> None:
-    """
-    Adds alphabetical labels (A, B, C, ...) to each subplot.
-
-    Parameters:
-        axs: array-like
-            The array of subplot axes, typically returned by plt.subplots.
-        n_rows: int
-            Number of rows of subplots.
-        n_cols: int
-            Number of columns of subplots.
-
-    Returns:
-        None
-    """
     labels = list(string.ascii_lowercase)  # Lowercase letters for labels
     label_idx = 0  # Track the current label index
 
-    if n_rows == 1:  # Handle single row (axs is 1D)
-        for col in range(n_cols):
-            axs[col].text(
+    if n_rows == 1 or n_cols == 1:  # Handle single row or single column (1D axs)
+        axs = axs.flatten() if hasattr(axs, 'flatten') else axs  # Ensure 1D array-like
+        for ax in axs:
+            ax.text(
                 -0.1, 1.1,  # Position relative to the axes
                 labels[label_idx],  # Current label
-                transform=axs[col].transAxes,  # Use subplot's coordinate system
+                transform=ax.transAxes,  # Use subplot's coordinate system
                 fontsize=14,
                 fontweight='bold',
                 va='top',  # Vertical alignment
